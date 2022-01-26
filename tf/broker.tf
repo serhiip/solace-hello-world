@@ -64,7 +64,6 @@ sudo apt-get install \
     gnupg \
     lsb-release \
     apt-transport-https \
-    docker-compose \
     git \
     -y
 echo \
@@ -73,9 +72,6 @@ echo \
 sudo apt-get update
 sudo apt-get install docker-ce docker-ce-cli containerd.io -y --allow-unauthenticated
 
-#git clone https://github.com/SolaceLabs/solace-single-docker-compose.git
-#cd solace-single-docker-compose/template
-#sudo docker-compose -f PubSubStandard_singleNode.yml up -d
 sudo docker run -d -p 8080:8080 -p 55555:55555 -p:8008:8008 -p:1883:1883 -p:8000:8000 -p:5672:5672 -p:9000:9000 -p:2222:2222 --shm-size=2g --env username_admin_globalaccesslevel=admin --env username_admin_password=admin --name=solace-broker solace/solace-pubsub-standard
 
 EOF
