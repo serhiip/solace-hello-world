@@ -3,7 +3,7 @@
 # }
 
 resource "google_compute_address" "solace_broker" {
-  name = "solace-broker-ip-address"
+  name   = "solace-broker-ip-address"
   region = var.region
 }
 
@@ -28,23 +28,15 @@ resource "google_compute_instance_template" "solace_broker" {
 
   // Create a new boot disk from an image
   disk {
-    source_image      = "debian-cloud/debian-10"
-    auto_delete       = true
-    boot              = true
-  }
-
-  // Use an existing disk resource
-  disk {
-    // Instance Templates reference disks by name, not self link
-    source      = google_compute_disk.foobar.name
-    auto_delete = false
-    boot        = false
+    source_image = "cos-cloud/cos-stable"
+    auto_delete  = true
+    boot         = true
   }
 
   network_interface {
     network = "default"
     access_config {
-      nat_ip = google_compute_address.solace_broker.address
+      nat_ip       = google_compute_address.solace_broker.address
       network_tier = "STANDARD"
     }
   }
@@ -65,7 +57,10 @@ sudo apt-get install \
     lsb-release \
     apt-transport-https \
     git \
+    python3 \
+    python3-pip \
     -y
+
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -77,19 +72,6 @@ sudo docker run -d -p 8080:8080 -p 55555:55555 -p:8008:8008 -p:1883:1883 -p:8000
 EOF
 }
 
-data "google_compute_image" "my_image" {
-  family  = "cos-stable"
-  project = "cos-cloud"
-}
-
-resource "google_compute_disk" "foobar" {
-  name  = "existing-disk"
-  image = data.google_compute_image.my_image.self_link
-  size  = 10
-  type  = "pd-ssd"
-  zone  = var.default_zone
-}
-
 resource "google_compute_instance_from_template" "solace_broker" {
   name = "solace-broker"
   zone = var.default_zone
@@ -97,4 +79,8 @@ resource "google_compute_instance_from_template" "solace_broker" {
   source_instance_template = google_compute_instance_template.solace_broker.id
 
   can_ip_forward = false
+}
+
+output "broker-internal-ip" {
+  value = google_compute_instance_from_template.solace_broker.network_interface[0].network_ip
 }
