@@ -81,6 +81,6 @@ resource "google_compute_instance_from_template" "solace_broker" {
   can_ip_forward = false
 }
 
-output "broker-internal-ip" {
+output "solace-broker-internal-ip" {
   value = google_compute_instance_from_template.solace_broker.network_interface[0].network_ip
 }

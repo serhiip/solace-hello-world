@@ -3,26 +3,34 @@ from solace.messaging.messaging_service import MessagingService, MessagingServic
 import os
 import time
 
-from solace.messaging.messaging_service import MessagingService, ReconnectionListener, ReconnectionAttemptListener, ServiceInterruptionListener, RetryStrategy, ServiceEvent
+from solace.messaging.messaging_service import MessagingService, ReconnectionListener, ReconnectionAttemptListener, ServiceInterruptionListener, RetryStrategy, ServiceEvent, PersistentMessageReceiverBuilder
 from solace.messaging.errors.pubsubplus_client_error import PubSubPlusClientError
 from solace.messaging.publisher.direct_message_publisher import PublishFailureListener
 from solace.messaging.resources.topic_subscription import TopicSubscription
 from solace.messaging.receiver.message_receiver import MessageHandler
+from solace.messaging.receiver.persistent_message_receiver import PersistentMessageReceiver
 from solace.messaging.config.solace_properties.message_properties import APPLICATION_MESSAGE_ID
 # from solace.messaging.core.solace_message import SolaceMessage
 from solace.messaging.resources.topic import Topic
+from solace.messaging.resources.queue import Queue
+import threading
 
 TOPIC_PREFIX = "solace/samples"
 SHUTDOWN = False
 
 # Handle received messages
 class MessageHandlerImpl(MessageHandler):
+
+    def __init__(self, handler_type: str):
+        """Contstructor."""
+        self.handler_type = handler_type
+
     def on_message(self, message: 'InboundMessage'):
         global SHUTDOWN
         if "quit" in message.get_destination_name():
             print("QUIT message received, shutting down.")
             SHUTDOWN = True
-        print("\n" + f"Message dump: {message.solace_message.get_message_dump()} \n")
+        print("\n" + f"Message dump: {message.solace_message.get_message_dump()} in thread {threading.get_ident} in {self.handler_type} receiver \n")
 
 # Inner classes for error handling
 class ServiceEventHandler(ReconnectionListener, ReconnectionAttemptListener, ServiceInterruptionListener):
@@ -74,7 +82,6 @@ messaging_service.add_service_interruption_listener(service_handler)
 # Create a direct message publisher and start it
 direct_publisher = messaging_service.create_direct_message_publisher_builder().build()
 direct_publisher.set_publish_failure_listener(PublisherErrorHandling())
-direct_publisher.set_publisher_readiness_listener
 
 # Blocking Start thread
 direct_publisher.start()
@@ -83,6 +90,8 @@ direct_publisher.start()
 unique_name = ""
 while not unique_name:
     unique_name = input("Enter your name: ").replace(" ", "")
+
+durable_exclusive_queue = Queue.durable_exclusive_queue("test")
 
 # Define a Topic subscriptions 
 topics = [TOPIC_PREFIX + "/*/hello/>"]
@@ -102,9 +111,13 @@ try:
     print(f"Subscribed to: {topics}")
     # Build a Receiver
     direct_receiver = messaging_service.create_direct_message_receiver_builder().with_subscriptions(topics_sub).build()
+    bld: PersistentMessageReceiverBuilder = messaging_service.create_persistent_message_receiver_builder().with_message_auto_acknowledgement()
+    persistent_receiver: PersistentMessageReceiver = bld.build(durable_exclusive_queue)
     direct_receiver.start()
+    persistent_receiver.start()
     # Callback for received messages
-    direct_receiver.receive_async(MessageHandlerImpl())
+    direct_receiver.receive_async(MessageHandlerImpl("direct"))
+    persistent_receiver.receive_async(MessageHandlerImpl("persistent"))
     if direct_receiver.is_running():
         print("Connected and Subscribed! Ready to publish\n")
     try:
@@ -124,8 +137,10 @@ try:
     except PubSubPlusClientError as exception:
         print(f'Received a PubSubPlusClientException: {exception}')
 finally:
-    print('Terminating Publisher and Receiver')
+    print('Terminating Publisher and Receivers')
     direct_publisher.terminate()
     direct_receiver.terminate()
+    print('Terminating Persistent Receiver')
+    persistent_receiver.terminate()
     print('Disconnecting Messaging Service')
     messaging_service.disconnect()

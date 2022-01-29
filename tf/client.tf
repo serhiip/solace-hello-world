@@ -48,7 +48,7 @@ EOF
 }
 
 resource "google_compute_instance_from_template" "solace_client" {
-  name = "client"
+  name = "solace-client"
   zone = var.default_zone
 
   source_instance_template = google_compute_instance_template.solace_client.id
